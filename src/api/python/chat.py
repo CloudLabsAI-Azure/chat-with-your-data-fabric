@@ -130,6 +130,32 @@ _MARKER_RE = re.compile(r'【\d+:(\d+)†([^】]*)】')
 
 def _parse_mcp_docs(mcp_text: str, mcp_docs: dict):
     """Parse JSON document blocks from MCP output text keyed by section index."""
+    try:
+        payload = json.loads(mcp_text)
+    except (json.JSONDecodeError, TypeError, ValueError):
+        payload = None
+
+    if isinstance(payload, dict) and isinstance(payload.get("documents"), list):
+        for sec_idx, wrapped_doc in enumerate(payload["documents"]):
+            if not isinstance(wrapped_doc, dict):
+                continue
+
+            doc_content = wrapped_doc.get("content")
+            if isinstance(doc_content, dict):
+                doc = doc_content
+            elif isinstance(doc_content, str):
+                try:
+                    doc = json.loads(doc_content)
+                except (json.JSONDecodeError, TypeError, ValueError):
+                    continue
+            else:
+                continue
+
+            if isinstance(doc, dict) and doc.get("id"):
+                mcp_docs[str(sec_idx)] = doc
+        return
+
+    # Legacy MCP output placed each document JSON block after its citation marker.
     sections = re.split(r'【\d+:(\d+)†[^】]*】', mcp_text)
     # sections alternates: [preamble, idx0, content0, idx1, content1, ...]
     for i in range(1, len(sections) - 1, 2):
@@ -361,6 +387,9 @@ async def stream_chat_request(conversation_id, query, user_id: str = "", user_as
 async def fetch_azure_search_content(request: Request):
     """Fetch document content from Azure AI Search by citation URL."""
     try:
+        # Require a valid access token before touching search content
+        get_authenticated_user_details(request_headers=request.headers)
+
         request_json = await request.json()
         citation_url = request_json.get("url")
         fallback_label = request_json.get("source") or request_json.get("title", "")
@@ -470,6 +499,8 @@ async def fetch_azure_search_content(request: Request):
         result = await asyncio.to_thread(fetch_content)
         return JSONResponse(content=result)
 
+    except HTTPException:
+        raise
     except Exception:
         logger.exception("Error in fetch_azure_search_content")
         return JSONResponse(
@@ -522,6 +553,8 @@ async def conversation(request: Request):
         )
         return StreamingResponse(result, media_type="application/json-lines")
 
+    except HTTPException:
+        raise
     except Exception as ex:
         logger.exception("Error in conversation endpoint: %s", str(ex))
 
