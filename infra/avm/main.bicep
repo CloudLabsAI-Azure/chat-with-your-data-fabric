@@ -79,7 +79,7 @@ param vmSize string = 'Standard_D2s_v5'
   azd: {
     type: 'location'
     usageName: [
-      'OpenAI.GlobalStandard.gpt-5.4-mini,100'
+      'OpenAI.GlobalStandard.gpt-5.4-mini,150'
       'OpenAI.GlobalStandard.text-embedding-3-small,80'
     ]
   }
@@ -641,7 +641,7 @@ module foundry_appi_connection './modules/ai/ai-foundry-connection.bicep' = if (
     target: app_insights!.outputs.resourceId
     authType: 'ApiKey'
     isDefault: true
-    credentialsKey: app_insights!.outputs.instrumentationKey
+    credentialsKey: app_insights!.outputs.connectionString
     metadata: {
       ApiType: 'Azure'
       ResourceId: app_insights!.outputs.resourceId
